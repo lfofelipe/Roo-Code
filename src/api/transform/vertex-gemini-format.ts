@@ -6,7 +6,7 @@ function convertAnthropicContentToVertexGemini(content: Anthropic.Messages.Messa
 		return [{ text: content } as TextPart]
 	}
 
-	return content.flatMap((block) => {
+	return content.flatMap((block): Part | Part[] => {
 		switch (block.type) {
 			case "text":
 				return { text: block.text } as TextPart
@@ -46,7 +46,18 @@ function convertAnthropicContentToVertexGemini(content: Anthropic.Messages.Messa
 					// The only case when tool_result could be array is when the tool failed and we're providing ie user feedback potentially with images
 					const textParts = block.content.filter((part) => part.type === "text")
 					const imageParts = block.content.filter((part) => part.type === "image")
-					const text = textParts.length > 0 ? textParts.map((part) => part.text).join("\n\n") : ""
+					const text =
+						textParts.length > 0
+							? textParts
+									.map((part) => {
+										// Ensure we only access text property on text parts
+										if (part.type === "text") {
+											return part.text
+										}
+										return ""
+									})
+									.join("\n\n")
+							: ""
 					const imageText = imageParts.length > 0 ? "\n\n(See next part for image)" : ""
 					return [
 						{
@@ -58,15 +69,18 @@ function convertAnthropicContentToVertexGemini(content: Anthropic.Messages.Messa
 								},
 							},
 						} as FunctionResponsePart,
-						...imageParts.map(
-							(part) =>
-								({
+						...imageParts.map((part) => {
+							// Ensure we only access source property on image parts
+							if (part.type === "image") {
+								return {
 									inlineData: {
 										data: part.source.data,
 										mimeType: part.source.media_type,
 									},
-								}) as InlineDataPart,
-						),
+								} as InlineDataPart
+							}
+							return {} as InlineDataPart
+						}),
 					]
 				}
 			default:

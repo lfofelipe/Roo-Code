@@ -720,7 +720,14 @@ export class Cline extends EventEmitter<ClineEvents> {
 						const contentAsTextBlocks = Array.isArray(block.content)
 							? block.content.filter((item) => item.type === "text")
 							: [{ type: "text", text: block.content }]
-						const textContent = contentAsTextBlocks.map((item) => item.text).join("\n\n")
+						const textContent = contentAsTextBlocks
+							.map((item) => {
+								if ("text" in item) {
+									return item.text
+								}
+								return ""
+							})
+							.join("\n\n")
 						const toolName = findToolName(block.tool_use_id, existingApiConversationHistory)
 						return {
 							type: "text",
@@ -3156,7 +3163,7 @@ export class Cline extends EventEmitter<ClineEvents> {
 			const { response, text, images } = await this.ask(
 				"mistake_limit_reached",
 				this.api.getModel().id.includes("claude")
-					? "This may indicate a failure in the assistant's thought process or inability to use a tool properly, which can be mitigated with some user guidance (e.g. \"Try breaking down the task into smaller steps\")."
+					? 'This may indicate a failure in the assistant\'s thought process or inability to use a tool properly, which can be mitigated with some user guidance (e.g. "Try breaking down the task into smaller steps").'
 					: "Roo Code uses complex prompts and iterative task execution that may be challenging for less capable models. For best results, it's recommended to use Claude 3.7 Sonnet for its advanced agentic coding capabilities.",
 			)
 			if (response === "messageResponse") {

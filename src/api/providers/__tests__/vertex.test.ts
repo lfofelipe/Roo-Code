@@ -5,7 +5,7 @@ import { AnthropicVertex } from "@anthropic-ai/vertex-sdk"
 import { BetaThinkingConfigParam } from "@anthropic-ai/sdk/resources/beta"
 
 import { VertexHandler } from "../vertex"
-import { ApiStreamChunk } from "../../transform/stream"
+import { ApiStreamChunk, ApiStreamTextChunk, ApiStreamReasoningChunk } from "../../transform/stream"
 import { VertexAI } from "@google-cloud/vertexai"
 
 // Mock Vertex SDK
@@ -484,7 +484,7 @@ describe("VertexHandler", () => {
 			})
 
 			// Verify text content
-			const textChunks = chunks.filter((chunk) => chunk.type === "text")
+			const textChunks = chunks.filter((chunk) => chunk.type === "text") as ApiStreamTextChunk[]
 			expect(textChunks).toHaveLength(2)
 			expect(textChunks[0].text).toBe("Hello")
 			expect(textChunks[1].text).toBe(" world!")
@@ -656,7 +656,7 @@ describe("VertexHandler", () => {
 			}
 
 			// Verify thinking content is processed correctly
-			const reasoningChunks = chunks.filter((chunk) => chunk.type === "reasoning")
+			const reasoningChunks = chunks.filter((chunk) => chunk.type === "reasoning") as ApiStreamReasoningChunk[]
 			expect(reasoningChunks).toHaveLength(2)
 			expect(reasoningChunks[0].text).toBe("Let me think about this...")
 			expect(reasoningChunks[1].text).toBe(" I need to consider all options.")
