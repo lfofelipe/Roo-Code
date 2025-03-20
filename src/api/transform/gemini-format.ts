@@ -9,17 +9,17 @@ function convertAnthropicContentToGemini(content: Anthropic.Messages.MessagePara
 	return content.flatMap((block) => {
 		switch (block.type) {
 			case "text":
-				return { text: block.text } as TextPart
+				return [{ text: block.text } as TextPart]
 			case "image":
 				if (block.source.type !== "base64") {
 					throw new Error("Unsupported image source type")
 				}
-				return {
+				return [{
 					inlineData: {
 						data: block.source.data,
 						mimeType: block.source.media_type,
 					},
-				} as InlineDataPart
+				} as InlineDataPart]
 			case "tool_use":
 				return {
 					functionCall: {

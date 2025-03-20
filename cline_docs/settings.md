@@ -1,148 +1,132 @@
-## For All Settings
+# Configurações do Roo Code
 
-1. Add the setting to ExtensionMessage.ts:
+Este documento descreve como adicionar uma nova configuração que persiste seu estado no Roo Code.
 
-    - Add the setting to the ExtensionState interface
-    - Make it required if it has a default value, optional if it can be undefined
-    - Example: `preferredLanguage: string`
+## Adicionando uma Nova Configuração
 
-2. Add test coverage:
-    - Add the setting to mockState in ClineProvider.test.ts
-    - Add test cases for setting persistence and state updates
-    - Ensure all tests pass before submitting changes
+Para adicionar uma nova configuração ao Roo Code, siga estas etapas:
 
-## For Checkbox Settings
+1. Adicione a configuração à interface `SecureConfig` em `src/core/config/index.ts`.
+2. Adicione o campo criptografado à interface global `globalConfig`.
+3. Atualize as funções `getSecureConfig` e `setSecureConfig` para manipular a nova configuração.
+4. Atualize a interface do usuário para fornecer controles para a nova configuração.
 
-1. Add the message type to WebviewMessage.ts:
+## Exemplo: Adicionando Configuração de API Key do Perplexity
 
-    - Add the setting name to the WebviewMessage type's type union
-    - Example: `| "multisearchDiffEnabled"`
+### 1. Atualize a interface `SecureConfig` em `src/core/config/index.ts`:
 
-2. Add the setting to ExtensionStateContext.tsx:
+```typescript
+export interface SecureConfig {
+  encryptedPerplexityEmail?: string;
+  encryptedPerplexityPassword?: string;
+  encryptedPerplexityApiKey?: string; // Adicione o campo criptografado
+  perplexityEmail?: string;
+  perplexityPassword?: string;
+  perplexityApiKey?: string; // Adicione o campo descriptografado
+  [key: string]: unknown;
+}
+```
 
-    - Add the setting to the ExtensionStateContextType interface
-    - Add the setter function to the interface
-    - Add the setting to the initial state in useState
-    - Add the setting to the contextValue object
-    - Example:
-        ```typescript
-        interface ExtensionStateContextType {
-        	multisearchDiffEnabled: boolean
-        	setMultisearchDiffEnabled: (value: boolean) => void
-        }
-        ```
+### 2. Atualize a interface global `globalConfig`:
 
-3. Add the setting to ClineProvider.ts:
+```typescript
+declare global {
+  // eslint-disable-next-line no-var
+  var globalConfig: {
+    encryptedPerplexityEmail?: string;
+    encryptedPerplexityPassword?: string;
+    encryptedPerplexityApiKey?: string; // Adicione o novo campo
+    [key: string]: unknown;
+  } | undefined;
+}
+```
 
-    - Add the setting name to the GlobalStateKey type union
-    - Add the setting to the Promise.all array in getState
-    - Add the setting to the return value in getState with a default value
-    - Add the setting to the destructured variables in getStateToPostToWebview
-    - Add the setting to the return value in getStateToPostToWebview
-    - Add a case in setWebviewMessageListener to handle the setting's message type
-    - Example:
-        ```typescript
-        case "multisearchDiffEnabled":
-          await this.updateGlobalState("multisearchDiffEnabled", message.bool)
-          await this.postStateToWebview()
-          break
-        ```
+### 3. Atualize as funções `getSecureConfig` e `setSecureConfig`:
 
-4. Add the checkbox UI to SettingsView.tsx:
+```typescript
+export const getSecureConfig = async (): Promise<SecureConfig> => {
+  // Código existente...
 
-    - Import the setting and its setter from ExtensionStateContext
-    - Add the VSCodeCheckbox component with the setting's state and onChange handler
-    - Add appropriate labels and description text
-    - Example:
-        ```typescript
-        <VSCodeCheckbox
-          checked={multisearchDiffEnabled}
-          onChange={(e: any) => setMultisearchDiffEnabled(e.target.checked)}
-        >
-          <span style={{ fontWeight: "500" }}>Enable multi-search diff matching</span>
-        </VSCodeCheckbox>
-        ```
+  // Decrypt sensitive information
+  let perplexityEmail: string | undefined;
+  let perplexityPassword: string | undefined;
+  let perplexityApiKey: string | undefined; // Adicione a nova variável
+  
+  // Código existente para email e senha...
+  
+  if (config.encryptedPerplexityApiKey) {
+    try {
+      perplexityApiKey = decrypt(config.encryptedPerplexityApiKey as string);
+    } catch (error) {
+      console.error('Failed to decrypt Perplexity API key:', error);
+    }
+  }
+  
+  return {
+    ...config,
+    perplexityEmail,
+    perplexityPassword,
+    perplexityApiKey // Inclua o novo campo no retorno
+  };
+};
 
-5. Add the setting to handleSubmit in SettingsView.tsx:
-    - Add a vscode.postMessage call to send the setting's value when clicking Done
-    - Example:
-        ```typescript
-        vscode.postMessage({ type: "multisearchDiffEnabled", bool: multisearchDiffEnabled })
-        ```
+export const setSecureConfig = (config: { 
+  perplexityEmail?: string; 
+  perplexityPassword?: string;
+  perplexityApiKey?: string; // Adicione o novo campo
+  [key: string]: unknown;
+}): void => {
+  // Código existente...
+  
+  if (config.perplexityApiKey) {
+    global.globalConfig.encryptedPerplexityApiKey = encrypt(config.perplexityApiKey);
+  }
+  
+  // Atualize a exclusão de campos para cópia
+  for (const key in config) {
+    if (key !== 'perplexityEmail' && key !== 'perplexityPassword' && key !== 'perplexityApiKey') {
+      global.globalConfig[key] = config[key];
+    }
+  }
+};
+```
 
-## For Select/Dropdown Settings
+### 4. Atualize a interface do usuário
 
-1. Add the message type to WebviewMessage.ts:
+Adicione um novo campo de texto na página de configurações para permitir que o usuário insira sua chave de API do Perplexity. Você precisará atualizar o componente de configurações em `webview-ui/src/components/Settings.tsx` ou equivalente.
 
-    - Add the setting name to the WebviewMessage type's type union
-    - Example: `| "preferredLanguage"`
+```tsx
+// Exemplo de implementação do campo na interface do usuário
+<InputField
+  label="Perplexity API Key"
+  type="password"
+  placeholder="Digite sua chave de API do Perplexity"
+  value={perplexityApiKey}
+  onChange={(e) => setPerplexityApiKey(e.target.value)}
+/>
 
-2. Add the setting to ExtensionStateContext.tsx:
+// No manipulador de salvar configurações
+const handleSave = () => {
+  setSecureConfig({
+    ...otherConfig,
+    perplexityApiKey,
+    // outras configurações existentes
+  });
+};
+```
 
-    - Add the setting to the ExtensionStateContextType interface
-    - Add the setter function to the interface
-    - Add the setting to the initial state in useState with a default value
-    - Add the setting to the contextValue object
-    - Example:
-        ```typescript
-        interface ExtensionStateContextType {
-        	preferredLanguage: string
-        	setPreferredLanguage: (value: string) => void
-        }
-        ```
+## Notas Importantes
 
-3. Add the setting to ClineProvider.ts:
+- Todas as configurações sensíveis devem ser criptografadas usando a função `encrypt` do `src/core/crypto.ts`.
+- Nunca armazene credenciais em texto simples no código ou em configurações não criptografadas.
+- Para verificar a validade de uma chave de API, implemente uma função de verificação como a `verifyApiKey` no serviço Perplexity.
 
-    - Add the setting name to the GlobalStateKey type union
-    - Add the setting to the Promise.all array in getState
-    - Add the setting to the return value in getState with a default value
-    - Add the setting to the destructured variables in getStateToPostToWebview
-    - Add the setting to the return value in getStateToPostToWebview
-    - Add a case in setWebviewMessageListener to handle the setting's message type
-    - Example:
-        ```typescript
-        case "preferredLanguage":
-          await this.updateGlobalState("preferredLanguage", message.text)
-          await this.postStateToWebview()
-          break
-        ```
+## Implementação do Human Relay com API do Perplexity
 
-4. Add the select UI to SettingsView.tsx:
+O Human Relay agora suporta o uso da API oficial do Perplexity como método primário, com automação do navegador como fallback:
 
-    - Import the setting and its setter from ExtensionStateContext
-    - Add the select element with appropriate styling to match VSCode's theme
-    - Add options for the dropdown
-    - Add appropriate labels and description text
-    - Example:
-        ```typescript
-        <select
-          value={preferredLanguage}
-          onChange={(e) => setPreferredLanguage(e.target.value)}
-          style={{
-            width: "100%",
-            padding: "4px 8px",
-            backgroundColor: "var(--vscode-input-background)",
-            color: "var(--vscode-input-foreground)",
-            border: "1px solid var(--vscode-input-border)",
-            borderRadius: "2px"
-          }}>
-          <option value="English">English</option>
-          <option value="Spanish">Spanish</option>
-          ...
-        </select>
-        ```
+1. Tenta usar a API do Perplexity se uma chave de API estiver configurada.
+2. Se a API falhar ou não estiver configurada, tenta usar automação do navegador.
+3. Se ambos falharem, solicita resposta manual do usuário.
 
-5. Add the setting to handleSubmit in SettingsView.tsx:
-    - Add a vscode.postMessage call to send the setting's value when clicking Done
-    - Example:
-        ```typescript
-        vscode.postMessage({ type: "preferredLanguage", text: preferredLanguage })
-        ```
-
-These steps ensure that:
-
-- The setting's state is properly typed throughout the application
-- The setting persists between sessions
-- The setting's value is properly synchronized between the webview and extension
-- The setting has a proper UI representation in the settings view
-- Test coverage is maintained for the new setting
+Essa abordagem melhora a confiabilidade e reduz a dependência de automação do navegador, que pode ser afetada por mudanças no site do Perplexity.

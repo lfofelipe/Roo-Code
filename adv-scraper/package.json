@@ -1,0 +1,218 @@
+{
+  "name": "adv-scraper",
+  "displayName": "Advanced Web Scraper",
+  "description": "Sistema avançado de coleta de dados web resistente contra técnicas anti-bot modernas",
+  "version": "1.0.0",
+  "publisher": "advanced-web-scraper",
+  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/advanced-web-scraper/adv-scraper.git"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:adv-scraper.createTask",
+    "onCommand:adv-scraper.startTask",
+    "onCommand:adv-scraper.stopTask",
+    "onCommand:adv-scraper.configureIdentity",
+    "onCommand:adv-scraper.configureProxy",
+    "onCommand:adv-scraper.openDashboard",
+    "onCommand:adv-scraper.webview.open",
+    "onCommand:adv-scraper.exportData",
+    "onView:scraper-tasks",
+    "onView:scraper-profiles",
+    "onView:scraper-monitoring",
+    "onView:scraper-results"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "adv-scraper.createTask",
+        "title": "Advanced Web Scraper: Criar Nova Tarefa"
+      },
+      {
+        "command": "adv-scraper.startTask",
+        "title": "Advanced Web Scraper: Iniciar Tarefa"
+      },
+      {
+        "command": "adv-scraper.stopTask",
+        "title": "Advanced Web Scraper: Parar Tarefa"
+      },
+      {
+        "command": "adv-scraper.configureIdentity",
+        "title": "Advanced Web Scraper: Configurar Identidade"
+      },
+      {
+        "command": "adv-scraper.configureProxy",
+        "title": "Advanced Web Scraper: Configurar Proxy"
+      },
+      {
+        "command": "adv-scraper.openDashboard",
+        "title": "Advanced Web Scraper: Abrir Dashboard"
+      },
+      {
+        "command": "adv-scraper.exportData",
+        "title": "Advanced Web Scraper: Exportar Dados"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "advanced-web-scraper",
+          "title": "Advanced Web Scraper",
+          "icon": "media/icons/robot.svg"
+        }
+      ]
+    },
+    "views": {
+      "advanced-web-scraper": [
+        {
+          "id": "scraper-tasks",
+          "name": "Tarefas"
+        },
+        {
+          "id": "scraper-profiles",
+          "name": "Identidades & Proxies"
+        },
+        {
+          "id": "scraper-monitoring",
+          "name": "Monitoramento"
+        },
+        {
+          "id": "scraper-results",
+          "name": "Resultados"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "adv-scraper.createTask",
+          "when": "view == scraper-tasks",
+          "group": "navigation"
+        },
+        {
+          "command": "adv-scraper.configureIdentity",
+          "when": "view == scraper-profiles",
+          "group": "navigation"
+        },
+        {
+          "command": "adv-scraper.configureProxy",
+          "when": "view == scraper-profiles",
+          "group": "navigation"
+        },
+        {
+          "command": "adv-scraper.openDashboard",
+          "when": "view == scraper-monitoring",
+          "group": "navigation"
+        },
+        {
+          "command": "adv-scraper.exportData",
+          "when": "view == scraper-results",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Advanced Web Scraper",
+      "properties": {
+        "adv-scraper.storageLocation": {
+          "type": "string",
+          "default": "${workspaceFolder}/scraper-data",
+          "description": "Diretório para armazenar dados gerados pela extensão (screenshots, fingerprints, etc.)"
+        },
+        "adv-scraper.defaultBehavior": {
+          "type": "object",
+          "default": {
+            "humanLike": true,
+            "randomizeUserAgent": true,
+            "respectRobotsTxt": true,
+            "evasionLevel": "standard",
+            "waitTimes": {
+              "minDelay": 500,
+              "maxDelay": 3000
+            }
+          },
+          "description": "Configurações padrão de comportamento do scraper"
+        },
+        "adv-scraper.proxySettings": {
+          "type": "object",
+          "default": {
+            "enabled": false,
+            "type": "residential",
+            "rotationInterval": 300
+          },
+          "description": "Configurações padrão de proxy"
+        },
+        "adv-scraper.securityLevel": {
+          "type": "string",
+          "enum": ["basic", "standard", "advanced", "maximum"],
+          "default": "standard",
+          "description": "Nível de segurança e evasão anti-bot"
+        },
+        "adv-scraper.aiServices": {
+          "type": "object",
+          "default": {
+            "enabled": false,
+            "provider": "openai",
+            "model": "gpt-4-vision-preview",
+            "apiKey": ""
+          },
+          "description": "Configuração de serviços de IA para processamento visual"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "webpack",
+    "watch": "webpack --watch",
+    "package": "webpack --mode production --devtool hidden-source-map",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/glob": "^8.1.0",
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^20.11.10",
+    "@types/uuid": "^9.0.7",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.19.1",
+    "@typescript-eslint/parser": "^6.19.1",
+    "@vscode/test-electron": "^2.3.8",
+    "eslint": "^8.56.0",
+    "glob": "^10.3.10",
+    "mocha": "^10.2.0",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.3.3",
+    "webpack": "^5.90.0",
+    "webpack-cli": "^5.1.4"
+  },
+  "dependencies": {
+    "axios": "^1.6.7",
+    "csv-stringify": "^6.4.5",
+    "date-fns": "^3.3.1",
+    "exceljs": "^4.4.0",
+    "fingerprint-generator": "^2.1.47",
+    "http-proxy-agent": "^7.0.0",
+    "https-proxy-agent": "^7.0.2",
+    "node-fetch": "^3.3.2",
+    "playwright": "^1.41.2",
+    "puppeteer": "^21.11.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "socks-proxy-agent": "^8.0.2",
+    "uuid": "^9.0.1",
+    "ws": "^8.16.0"
+  }
+}
