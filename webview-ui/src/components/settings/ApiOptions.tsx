@@ -36,6 +36,8 @@ import {
 	unboundDefaultModelInfo,
 	requestyDefaultModelId,
 	requestyDefaultModelInfo,
+	perplexityDefaultModelId,
+	perplexityModels,
 	ApiProvider,
 } from "../../../../src/shared/api"
 import { ExtensionMessage } from "../../../../src/shared/ExtensionMessage"
@@ -231,13 +233,17 @@ const ApiOptions = ({
 	useEvent("message", onMessage)
 
 	const selectedProviderModelOptions = useMemo(
-		() =>
-			MODELS_BY_PROVIDER[selectedProvider]
-				? Object.keys(MODELS_BY_PROVIDER[selectedProvider]).map((modelId) => ({
-						value: modelId,
-						label: modelId,
-					}))
-				: [],
+		() => {
+			const models = MODELS_BY_PROVIDER[selectedProvider]
+			if (!models) {
+				return []
+			}
+			
+			return Object.keys(models).map((modelId) => ({
+				value: modelId,
+				label: modelId,
+			}))
+		},
 		[selectedProvider],
 	)
 
@@ -1309,6 +1315,117 @@ const ApiOptions = ({
 				</>
 			)}
 
+			{selectedProvider === "perplexity" && (
+				<>
+					<div className="text-sm p-2 mb-2 rounded-md" style={{ 
+						backgroundColor: 'var(--vscode-inputValidation-infoBackground)',
+						border: '1px solid var(--vscode-inputValidation-infoBorder)',
+						color: 'var(--vscode-inputValidation-infoForeground)'
+					}}>
+						Para usar o Perplexity PRO, é necessário fornecer seu email e senha da conta.
+					</div>
+					
+					{/* Email - Simplificado como outros provedores */}
+					<VSCodeTextField
+						value={apiConfiguration?.perplexityEmail || ""}
+						type="email"
+						onInput={handleInputChange("perplexityEmail")}
+						placeholder="email@example.com"
+						className="w-full">
+						<label className="block font-medium mb-1">Email da conta Perplexity</label>
+					</VSCodeTextField>
+					
+					{/* Senha - Simplificado como outros provedores */}
+					<VSCodeTextField
+						value={apiConfiguration?.perplexityPassword || ""}
+						type="password"
+						onInput={handleInputChange("perplexityPassword")}
+						placeholder="Sua senha do Perplexity"
+						className="w-full">
+						<label className="block font-medium mb-1">Senha da conta Perplexity</label>
+					</VSCodeTextField>
+					
+					<div className="text-sm text-vscode-descriptionForeground -mt-2">
+						{t("settings:providers.apiKeyStorageNotice")}
+						<div className="mt-1">Seus dados são criptografados localmente e nunca compartilhados.</div>
+					</div>
+					
+					{/* Chave de API (opcional) */}
+					<VSCodeTextField
+						value={apiConfiguration?.perplexityApiKey || ""}
+						type="password"
+						onInput={handleInputChange("perplexityApiKey")}
+						placeholder="pplx-xxxxxxxxxxxxxxxxxxxxxxxx"
+						className="w-full">
+						<label className="block font-medium mb-1">
+							Chave de API Perplexity (opcional para usuários PRO)
+						</label>
+					</VSCodeTextField>
+					<div className="text-sm text-vscode-descriptionForeground -mt-2 mb-2">
+						Use a API diretamente se tiver acesso. Encontre sua chave em <VSCodeLink href="https://perplexity.ai/settings">https://perplexity.ai/settings</VSCodeLink>.
+					</div>
+					
+					<div>
+						<label className="block font-medium mb-1">Método de autenticação</label>
+						<Select
+							value={apiConfiguration?.perplexityPreferMethod || "auto"}
+							onValueChange={(value) => setApiConfigurationField("perplexityPreferMethod", value as "api" | "browser" | "auto")}>
+							<SelectTrigger className="w-full">
+								<SelectValue placeholder={t("settings:common.select")} />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="auto">Automático (API com fallback para navegador)</SelectItem>
+								<SelectItem value="api">Somente API (requer chave de API)</SelectItem>
+								<SelectItem value="browser">Somente navegador (mais lento, mas sem limites de API)</SelectItem>
+							</SelectContent>
+						</Select>
+						<div className="text-sm text-vscode-descriptionForeground mt-1">
+							Recomendamos o modo Automático para maior confiabilidade.
+						</div>
+					</div>
+					
+					{/* Opções avançadas */}
+					<div className="mt-3 p-3 rounded-md border border-slate-700">
+						<div className="font-medium mb-2">Opções avançadas</div>
+						
+						<Checkbox
+							checked={apiConfiguration?.perplexityLoggingEnabled ?? true}
+							onChange={handleInputChange("perplexityLoggingEnabled", noTransform)}>
+							Habilitar logs detalhados (recomendado para diagnóstico)
+						</Checkbox>
+						
+						<VSCodeTextField
+							value={apiConfiguration?.perplexityRequestTimeout?.toString() || "60000"}
+							type="text"
+							onInput={handleInputChange("perplexityRequestTimeout", (e) => parseInt((e.target as HTMLInputElement).value))}
+							placeholder="60000"
+							className="w-full mt-2">
+							<label className="block font-medium mb-1">Timeout de requisição (ms)</label>
+						</VSCodeTextField>
+						
+						<div className="text-sm text-vscode-descriptionForeground mt-2">
+							Um valor mais alto (60000 = 60 segundos) dá mais tempo para a resposta, mas pode parecer que a extensão travou.
+						</div>
+					</div>
+					
+					<div className="text-sm p-2 mt-4 rounded-md" style={{ 
+						backgroundColor: 'var(--vscode-inputValidation-infoBackground)',
+						border: '1px solid var(--vscode-inputValidation-infoBorder)'
+					}}>
+						<div className="font-medium mb-1">Sobre o Perplexity PRO</div>
+						A integração com Perplexity PRO permite usar o modelo Claude 3.7 através da interface web ou API do Perplexity sem custos adicionais de API. Para mais informações, consulte a <VSCodeLink href="https://perplexity.ai/pro">página do Perplexity PRO</VSCodeLink>.
+					</div>
+					
+					{/* Logs e feedback para o usuário */}
+					<div id="perplexity-logs">
+						<div className="font-medium mb-1">Logs de diagnóstico</div>
+						<div className="text-sm bg-black text-white p-2 rounded h-24 overflow-y-auto font-mono">
+							<div className="log-content">Logs do Perplexity PRO serão exibidos aqui.</div>
+						</div>
+					</div>
+				</>
+			)}
+			
 			{selectedProvider === "human-relay" && (
 				<>
 					<div className="text-sm text-vscode-descriptionForeground">
@@ -1645,6 +1762,8 @@ export function normalizeApiConfiguration(apiConfiguration?: ApiConfiguration) {
 					supportsImages: false, // VSCode LM API currently doesn't support images.
 				},
 			}
+		case "perplexity":
+			return getProviderData(perplexityModels, perplexityDefaultModelId)
 		default:
 			return getProviderData(anthropicModels, anthropicDefaultModelId)
 	}

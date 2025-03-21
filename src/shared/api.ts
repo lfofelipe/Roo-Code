@@ -17,6 +17,7 @@ export type ApiProvider =
 	| "unbound"
 	| "requesty"
 	| "human-relay"
+	| "perplexity"
 
 export interface ApiHandlerOptions {
 	apiModelId?: string
@@ -73,6 +74,14 @@ export interface ApiHandlerOptions {
 	requestyApiKey?: string
 	requestyModelId?: string
 	requestyModelInfo?: ModelInfo
+	// Perplexity configuration
+	perplexityEmail?: string
+	perplexityPassword?: string
+	perplexityApiKey?: string
+	perplexityModelId?: string
+	perplexityPreferMethod?: "api" | "browser" | "auto"
+	perplexityLoggingEnabled?: boolean
+	perplexityRequestTimeout?: number
 	modelTemperature?: number | null
 	modelMaxTokens?: number
 	modelMaxThinkingTokens?: number
@@ -134,6 +143,14 @@ export const API_CONFIG_KEYS: GlobalStateKey[] = [
 	"modelTemperature",
 	"modelMaxTokens",
 	"modelMaxThinkingTokens",
+	// Adicionar chaves do Perplexity
+	"perplexityEmail",
+	"perplexityPassword",
+	"perplexityApiKey",
+	"perplexityPreferMethod",
+	"perplexityLoggingEnabled",
+	"perplexityRequestTimeout",
+	"perplexityModelId",
 ]
 
 // Models
@@ -1033,3 +1050,28 @@ export const unboundDefaultModelInfo: ModelInfo = {
 	cacheWritesPrice: 3.75,
 	cacheReadsPrice: 0.3,
 }
+
+// Perplexity PRO
+export type PerplexityModelId = keyof typeof perplexityModels
+export const perplexityDefaultModelId: PerplexityModelId = "claude-3-7-sonnet"
+export const perplexityModels = {
+	"claude-3-7-sonnet": {
+		maxTokens: 16_384,
+		contextWindow: 200_000,
+		supportsImages: true,
+		supportsComputerUse: true,
+		supportsPromptCache: true,
+		inputPrice: 0.0, // Acesso gratuito via Perplexity PRO
+		outputPrice: 0.0, // Acesso gratuito via Perplexity PRO
+		description: "Claude 3.7 Sonnet acessado via Perplexity PRO, sem custos adicionais de API",
+	},
+	"claude-3-opus": {
+		maxTokens: 4096,
+		contextWindow: 200_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		inputPrice: 0.0, // Acesso gratuito via Perplexity PRO
+		outputPrice: 0.0, // Acesso gratuito via Perplexity PRO
+		description: "Claude 3 Opus acessado via Perplexity PRO, sem custos adicionais de API",
+	}
+} as const satisfies Record<string, ModelInfo>

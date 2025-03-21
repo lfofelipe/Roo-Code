@@ -1,0 +1,507 @@
+import * as vscode from "vscode"
+import axios from "axios"
+import { ApiHandlerOptions } from "../../shared/api"
+import * as puppeteer from "puppeteer-core"
+import * as fs from "fs"
+import { ProgressLocation } from "vscode"
+
+const DEFAULT_TIMEOUT = 15000 // 60 segundos
+const RETRY_TIMEOUT = 1000 // 1 segundo
+const MAX_RETRIES = 3
+
+interface PerplexityMessage {
+  role: string
+  content: any[]
+}
+
+interface PerplexityMessageContent {
+  type: string
+  text?: string
+  image_url?: {
+    url: string
+  }
+}
+
+interface PerplexityApiResponse {
+  id: string
+  choices: {
+    message: {
+      content: string
+      role: string
+    }
+  }[]
+}
+
+// Função simplificada para imagens - já que não podemos importar getEmbeddedImageBase64
+async function processImage(imageUrl: string): Promise<string | null> {
+  try {
+    // Na versão atual, as imagens não são suportadas na automação de navegador,
+    // então retornamos null
+    console.log(`[Perplexity] Image handling not implemented for ${imageUrl}`)
+    return null
+  } catch (error) {
+    console.error(`[Perplexity] Failed to process image: ${error}`)
+    return null
+  }
+}
+
+export async function perplexityCompletion(
+  messages: { role: string; content: string }[],
+  imageUrls: string[] | null,
+  options: ApiHandlerOptions,
+  onPartialResponse: ((content: string) => void) | null,
+  signal?: AbortSignal,
+  maxTokens: number = 200000
+) {
+  const {
+    perplexityEmail,
+    perplexityPassword,
+    perplexityApiKey,
+    perplexityPreferMethod = "auto",
+    perplexityLoggingEnabled = false,
+    perplexityRequestTimeout = DEFAULT_TIMEOUT,
+    apiModelId = "claude-3-7-sonnet",
+  } = options
+
+  const log = (message: string) => {
+    if (perplexityLoggingEnabled) {
+      console.log(`[Perplexity] ${message}`)
+    }
+  }
+
+  log(`Starting Perplexity completion request with method preference: ${perplexityPreferMethod}`)
+
+  // Preparar as mensagens convertendo formatos
+  const perplexityMessages: PerplexityMessage[] = await Promise.all(
+    messages.map(async (message) => {
+      if (message.role === "user" && imageUrls && imageUrls.length > 0) {
+        // Mensagens com imagens
+        const content: PerplexityMessageContent[] = [{ type: "text", text: message.content }]
+
+        for (const imageUrl of imageUrls) {
+          try {
+            const base64 = await processImage(imageUrl)
+            if (base64) {
+              content.push({
+                type: "image_url",
+                image_url: {
+                  url: `data:image/jpeg;base64,${base64}`,
+                },
+              })
+            }
+          } catch (error) {
+            console.error(`[Perplexity] Failed to process image: ${error}`)
+          }
+        }
+
+        return {
+          role: message.role,
+          content,
+        }
+      }
+
+      // Mensagens de texto simples
+      return {
+        role: message.role,
+        content: [{ type: "text", text: message.content }],
+      }
+    })
+  )
+
+  // Determinar qual método usar com base na configuração
+  if (perplexityPreferMethod === "api") {
+    // Método API apenas - exige chave de API
+    if (!perplexityApiKey) {
+      throw new Error(
+        "Chave de API do Perplexity é necessária quando o método 'Somente API' está selecionado. Configure-a nas configurações do RooCode."
+      )
+    }
+    
+    log("Usando apenas método de API Perplexity conforme configuração")
+    return await callPerplexityApi(
+      perplexityMessages,
+      perplexityApiKey,
+      apiModelId,
+      onPartialResponse,
+      perplexityRequestTimeout,
+      signal,
+      log
+    )
+  } 
+  else if (perplexityPreferMethod === "browser") {
+    // Método de navegador apenas - exige email e senha
+    if (!perplexityEmail || !perplexityPassword) {
+      throw new Error(
+        "Email e senha do Perplexity são necessários quando o método 'Somente navegador' está selecionado. Configure-os nas configurações do RooCode."
+      )
+    }
+    
+    log("Usando apenas método de navegador Perplexity conforme configuração")
+  }
+  else {
+    // Método automático - tenta API primeiro se disponível
+    if (perplexityApiKey) {
+      try {
+        log("Attempting to use Perplexity API (auto method)")
+        return await callPerplexityApi(
+          perplexityMessages,
+          perplexityApiKey,
+          apiModelId,
+          onPartialResponse,
+          perplexityRequestTimeout,
+          signal,
+          log
+        )
+      } catch (error) {
+        log(`API call failed, falling back to browser automation: ${error}`)
+      }
+    } else {
+      log("No API key found, using browser automation (auto method)")
+    }
+    
+    // Verificar credenciais para automação de navegador
+    if (!perplexityEmail || !perplexityPassword) {
+      throw new Error(
+        "Email e senha do Perplexity são necessários para o modo de navegador. Configure-os nas configurações do RooCode."
+      )
+    }
+  }
+
+  // Usar automação de navegador
+  log("Using browser automation for Perplexity")
+  return await vscode.window.withProgress(
+    {
+      location: ProgressLocation.Notification,
+      title: "Perplexity Browser",
+      cancellable: true,
+    },
+    async (progress, cancellationToken) => {
+      if (cancellationToken.isCancellationRequested) {
+        throw new Error("Operation cancelled by user")
+      }
+
+      return await usePerplexityBrowser(
+        perplexityEmail,
+        perplexityPassword,
+        messages,
+        imageUrls,
+        apiModelId,
+        progress,
+        cancellationToken,
+        log
+      )
+    }
+  )
+}
+
+async function callPerplexityApi(
+  messages: PerplexityMessage[],
+  apiKey: string,
+  modelId: string,
+  onPartialResponse: ((content: string) => void) | null,
+  timeout: number,
+  signal?: AbortSignal,
+  log = console.log
+): Promise<string> {
+  log(`Calling Perplexity API with model: ${modelId}`)
+  
+  try {
+    // Configuração de headers melhorada para evitar problemas de autenticação
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json"
+    };
+    
+    // Adicionar Authorization apenas se apiKey estiver presente
+    if (apiKey && apiKey.trim() !== '') {
+      headers.Authorization = `Bearer ${apiKey}`;
+      log('Using API key authentication');
+    } else {
+      log('WARNING: No API key provided for Perplexity API');
+      throw new Error("Chave de API do Perplexity é necessária. Configure-a nas configurações do RooCode.");
+    }
+    
+    const response = await axios.post<PerplexityApiResponse>(
+      "https://api.perplexity.ai/chat/completions",
+      {
+        model: modelId,
+        messages: messages.map(m => ({
+          role: m.role,
+          content: m.content,
+        })),
+        stream: !!onPartialResponse,
+      },
+      {
+        headers,
+        timeout,
+        signal,
+        responseType: onPartialResponse ? "stream" : "json",
+      }
+    )
+
+    if (onPartialResponse) {
+      // Processar streaming
+      let buffer = ""
+      const dataPrefix = "data: "
+      const stream = response.data as any
+
+      return new Promise((resolve, reject) => {
+        let fullResponse = ""
+
+        stream.on("data", (chunk: Buffer) => {
+          if (signal?.aborted) {
+            stream.destroy()
+            reject(new Error("Request aborted"))
+            return
+          }
+
+          buffer += chunk.toString()
+          let newlineIndex
+          while ((newlineIndex = buffer.indexOf("\n")) !== -1) {
+            const line = buffer.slice(0, newlineIndex).trim()
+            buffer = buffer.slice(newlineIndex + 1)
+
+            if (line.startsWith(dataPrefix)) {
+              const data = line.slice(dataPrefix.length)
+              if (data === "[DONE]") continue
+
+              try {
+                const parsed = JSON.parse(data)
+                if (parsed.choices && parsed.choices[0] && parsed.choices[0].delta && parsed.choices[0].delta.content) {
+                  const content = parsed.choices[0].delta.content
+                  fullResponse += content
+                  onPartialResponse(content)
+                }
+              } catch (e) {
+                log(`Error parsing streaming data: ${e}`)
+              }
+            }
+          }
+        })
+
+        stream.on("end", () => {
+          resolve(fullResponse)
+        })
+
+        stream.on("error", (err: Error) => {
+          reject(err)
+        })
+      })
+    } else {
+      // Resposta normal
+      return response.data.choices[0].message.content
+    }
+  } catch (error) {
+    log(`API request failed: ${error}`)
+    throw error
+  }
+}
+
+async function usePerplexityBrowser(
+  email: string,
+  password: string,
+  messages: { role: string; content: string }[],
+  imageUrls: string[] | null,
+  modelId: string,
+  progress: vscode.Progress<{ message?: string; increment?: number }>,
+  cancellationToken: vscode.CancellationToken,
+  log = console.log
+): Promise<string> {
+  // Encontrar executável do Chrome
+  let chromePath = ""
+  
+  // Verificar caminhos comuns baseados no SO
+  if (process.platform === "win32") {
+    chromePath = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+    if (!fs.existsSync(chromePath)) {
+      chromePath = "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe"
+    }
+  } else if (process.platform === "darwin") {
+    chromePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+  } else {
+    chromePath = "/usr/bin/google-chrome"
+  }
+
+  if (!fs.existsSync(chromePath)) {
+    throw new Error("Não foi possível encontrar o Chrome. Por favor, instale o Google Chrome para usar esta funcionalidade.")
+  }
+
+  let browser: puppeteer.Browser | null = null
+  try {
+    progress.report({ message: "Iniciando navegador..." })
+    
+    browser = await puppeteer.launch({
+      executablePath: chromePath,
+      headless: true, // Mudado de "new" para boolean
+      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+    })
+
+    const page = await browser.newPage()
+    log("Browser launched")
+    
+    // Set viewport e agendar fechamento do navegador ao cancelar
+    await page.setViewport({ width: 1280, height: 800 })
+    cancellationToken.onCancellationRequested(() => {
+      if (browser) {
+        browser.close().catch(console.error)
+      }
+    })
+    
+    // Login no Perplexity
+    progress.report({ message: "Acessando Perplexity..." })
+    await page.goto("https://www.perplexity.ai/login", { timeout: 30000 })
+    log("Navigated to login page")
+    
+    // Encontrar e preencher campo de email
+    try { 
+      await page.waitForSelector('input[type="email"]', { timeout: 5000 });
+      await page.type('input[type="email"]', email);
+    } catch (error) {
+      log("Não foi possível encontrar o campo de e-mail");
+      throw error;
+    }
+    
+    // Clicar no botão de continuar
+    const continueButton = await page.$('button[type="submit"]')
+    if (!continueButton) throw new Error("Botão de continuar não encontrado")
+    await continueButton.click()
+    
+    // Esperar pelo campo de senha
+    progress.report({ message: "Fazendo login..." })
+    await page.waitForSelector('input[type="password"]', { timeout: 10000 })
+    await page.type('input[type="password"]', password)
+    
+    // Submeter credenciais
+    const loginButton = await page.$('button[type="submit"]')
+    if (!loginButton) throw new Error("Botão de login não encontrado")
+    await loginButton.click()
+    
+    // Esperar pelo login ser concluído
+    await page.waitForNavigation({ timeout: 20000 }).catch(() => {
+      // Às vezes não navega, mas o login acontece
+      log("No navigation after login, but proceeding")
+    })
+    
+    // Verificar se o login foi bem sucedido
+    if (page.url().includes("login")) {
+      throw new Error("Falha no login - verifique suas credenciais")
+    }
+    
+    log("Login successful")
+    progress.report({ message: "Configurando conversa..." })
+    
+    // Ir para uma nova conversa e selecionar o modelo Claude
+    await page.goto("https://www.perplexity.ai/", { timeout: 30000 })
+    await page.waitForSelector('button[aria-label="New conversation"], button[aria-label="Nova conversa"]', { timeout: 10000 })
+    
+    // Encontrar e clicar no seletor de modelos
+    await page.waitForSelector('div[role="button"]', { timeout: 5000 })
+    const modelSelectors = await page.$$('div[role="button"]')
+    if (modelSelectors.length === 0) throw new Error("Seletor de modelos não encontrado")
+    
+    await modelSelectors[0].click()
+    
+    // Selecionar o modelo Claude na lista de opções
+    await page.waitForSelector('div[role="menuitem"]', { timeout: 5000 })
+    const menuItems = await page.$$('div[role="menuitem"]')
+    
+    let modelFound = false
+    for (const item of menuItems) {
+      const text = await page.evaluate((el: Element) => el.textContent, item)
+      if (text && text.toLowerCase().includes("claude")) {
+        await item.click()
+        modelFound = true
+        break
+      }
+    }
+    
+    if (!modelFound) {
+      log("Claude model not found in dropdown, trying to proceed anyway")
+    }
+    
+    // Preparar e enviar a mensagem
+    progress.report({ message: "Enviando mensagem..." })
+    
+    // Combinar todas as mensagens do usuário
+    const userMessage = messages
+      .filter(m => m.role === "user")
+      .map(m => m.content)
+      .join("\n\n")
+    
+    // Encontrar campo de texto e digitar mensagem
+    await page.waitForSelector('div[contenteditable="true"]', { timeout: 10000 })
+    await page.type('div[contenteditable="true"]', userMessage)
+    
+    // Se houver imagens, não podemos colocá-las diretamente usando o navegador headless
+    if (imageUrls && imageUrls.length > 0) {
+      log("Warning: Images cannot be added in headless browser mode")
+    }
+    
+    // Enviar mensagem
+    await page.keyboard.press("Enter")
+    
+    // Esperar pela resposta
+    progress.report({ message: "Aguardando resposta..." })
+    log("Waiting for response")
+    
+    // Aguardar pelo indicador de geração da resposta
+    await page.waitForSelector('div[data-key="assistant"] p, div[data-key="assistant"] li', { timeout: 60000 })
+    
+    // Esperar pela resposta completa
+    let retries = 0
+    let previousResponseLength = 0
+    let responseStabilityCount = 0
+    let response = ""
+    
+    while (retries < 30 && responseStabilityCount < 5) {
+      if (cancellationToken.isCancellationRequested) {
+        throw new Error("Operação cancelada pelo usuário")
+      }
+      
+      // Substituir waitForTimeout por delay usando setTimeout
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      // Verificar se ainda está gerando
+      const isGenerating = await page.evaluate(() => {
+        return document.querySelector('div.animate-pulse') !== null
+      })
+      
+      response = await page.evaluate(() => {
+        const responseElement = document.querySelector('div[data-key="assistant"]')
+        return responseElement ? responseElement.textContent || "" : ""
+      })
+      
+      if (response.length === previousResponseLength) {
+        responseStabilityCount++
+      } else {
+        responseStabilityCount = 0
+      }
+      
+      if (!isGenerating && responseStabilityCount >= 3) {
+        break
+      }
+      
+      previousResponseLength = response.length
+      retries++
+      
+      progress.report({
+        message: `Recebendo resposta... ${response.length} caracteres`
+      })
+    }
+    
+    log(`Response received: ${response.length} characters`)
+    
+    // Remover elementos de interface que possam estar no texto
+    response = response.replace(/Copiar\s*Compartilhar\s*Revisar/gi, "")
+    response = response.replace(/Copy\s*Share\s*Review/gi, "")
+    
+    return response
+  } catch (error) {
+    log(`Browser automation error: ${error}`)
+    throw error
+  } finally {
+    if (browser) {
+      log("Closing browser")
+      await browser.close()
+    }
+  }
+}

@@ -48,15 +48,24 @@ Check out the [CHANGELOG](CHANGELOG.md) for detailed updates and fixes.
 
 ---
 
-## 🎉 Roo Code 3.9 Released
+## 🎉 Roo Code 3.9.4 Released
 
-Roo Code has gone international in 3.9!
+Roo Code 3.9.4 traz uma nova integração com o Perplexity PRO, permitindo acesso ao modelo Claude 3.7 sem custos adicionais de API:
 
-- Roo Code has been translated into 14 different languages! To see them all and change your settings, go to Settings -> Language.
-- We now support both the stdio and SSE transports for MCP
-- By popular demand, you can now batch delete history items
-- Turn on text-to-speech in your settings to hear everything Roo has to say
-- Want more control over your OpenRouter? Now you can pick a specific provider for your model.
+- **Integração com Perplexity PRO**: Utilize o modelo Claude 3.7 através de sua conta Perplexity PRO existente
+- **Arquitetura em Camadas**: Sistema inteligente que alterna entre API oficial, automação de navegador e entrada manual
+- **Armazenamento Seguro**: Criptografia de credenciais e gestão segura das configurações do Perplexity
+- **Confiabilidade Aprimorada**: Sistema de fallback robusto e tratamento de erros avançado
+
+Além disso, inclui todas as melhorias da versão 3.9.3:
+- Correção de erros de TypeScript no tratamento de tipos em componentes de teste
+- Melhor tratamento de segurança de tipos ao acessar propriedades em objetos filtrados
+- Todas as funcionalidades da versão 3.9 continuam disponíveis:
+  - Suporte para 14 idiomas diferentes (altere em Settings -> Language)
+  - Suporte para MCP via stdio e SSE
+  - Exclusão em lote de itens do histórico
+  - Opção de text-to-speech para ouvir as respostas do Roo
+  - Maior controle sobre o OpenRouter com seleção específica de provedor
 
 ---
 

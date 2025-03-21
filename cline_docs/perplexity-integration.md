@@ -1,95 +1,143 @@
-# Melhorias na Integração com Perplexity
+# Integração do Perplexity PRO com RooCode
 
-## Problemas Identificados
+Esta documentação descreve a implementação da integração direta entre o RooCode e o Perplexity PRO, permitindo que os usuários utilizem o modelo Claude 3.7 sem custos adicionais de API.
 
-1. **Dependência do Playwright para automação do browser**
-   - A implementação anterior dependia exclusivamente do Playwright para automatizar interações com o Perplexity
-   - Vulnerável a mudanças na estrutura HTML/CSS do site do Perplexity
+## Visão Geral
 
-2. **Potenciais problemas de autenticação**
-   - Dependência de credenciais armazenadas sem uma interface clara para configuração
-   - Limitações no modo não autenticado
+A integração com o Perplexity PRO permite acessar o modelo Claude 3.7 através de dois métodos:
 
-3. **Detecção de bots pelo Perplexity**
-   - Tentativas de contornar a detecção podem falhar com métodos mais avançados
+1. **API REST do Perplexity** - Para usuários com chave de API disponível
+2. **Automação de navegador** - Para usuários sem chave de API, utilizando automação web
+3. **Entrada manual** - Como fallback quando os outros métodos falham
 
-4. **Seleção do modelo Claude 3.7**
-   - Implementação frágil para selecionar o modelo específico
+A implementação segue uma arquitetura em camadas, com sistemas de fallback automático para garantir máxima confiabilidade.
 
-5. **Componentes depreciados ainda em uso**
-   - Código legado referenciando implementações depreciadas
+## Benefícios
 
-6. **Gerenciamento de sessões e timeouts**
-   - Possíveis condições de corrida em sessões expiradas
+- **Acesso ao Claude 3.7** sem custos adicionais de API da Anthropic
+- **Automação transparente** que funciona em segundo plano
+- **Sistema de fallback** robusto que garante continuidade mesmo em caso de falhas
+- **Armazenamento seguro** de credenciais
+- **Configurações flexíveis** para personalizar o comportamento
 
-7. **Tratamento de erros incompleto**
-   - Cobertura insuficiente para falhas específicas do site
+## Configuração
 
-## Solução Implementada
+Para configurar a integração com o Perplexity PRO:
 
-### 1. Nova Arquitetura com Abordagem em Camadas
+1. Acesse as configurações do RooCode no VSCode
+2. Selecione "Perplexity PRO" como provedor de API
+3. Preencha suas credenciais do Perplexity:
+   - Email da conta Perplexity PRO
+   - Senha da conta Perplexity
+   - Chave de API (opcional, para usuários com acesso à API)
+4. Configure opções adicionais conforme necessário
 
-Criamos uma nova arquitetura com suporte a múltiplos métodos de interação com o Perplexity, implementando uma abordagem em camadas:
+## Arquitetura em Camadas
 
-1. **API REST oficial do Perplexity** (método primário)
-   - Utiliza a API REST do Perplexity quando uma chave de API está configurada
-   - Mais confiável e menos suscetível a quebras por mudanças no site
-   - Independente de automação de navegador
+A integração é implementada em várias camadas:
 
-2. **Automação do navegador** (fallback)
-   - Utilizado apenas quando a API não está disponível ou falha
-   - Mantém compatibilidade com implementações existentes
+### 1. Interface de Usuário (UI)
+- Componentes na interface de configurações do RooCode para configuração de credenciais
+- Opções para personalizar o comportamento da integração
 
-3. **Entrada manual do usuário** (último recurso)
-   - Caso ambos os métodos automáticos falhem
+### 2. Camada de Armazenamento Seguro
+- Criptografia de credenciais sensíveis
+- Gerenciamento de estado entre sessões
 
-### 2. Novo PerplexityService
+### 3. Automação do Perplexity
+- API REST para usuários com chave de API
+- Automação de navegador usando Playwright para interações com a interface web
 
-Implementamos um novo serviço `PerplexityService` que:
+### 4. Sistema de Gerenciamento de Sessões
+- Criação e manutenção de sessões do Perplexity
+- Limpeza automática de sessões inativas
 
-- Gerencia sessões do Perplexity de forma consistente
-- Suporta autenticação via API e via navegador
-- Implementa verificação e validação de chave de API
-- Adiciona mecanismos robustos de fallback entre métodos
-- Melhora o tratamento de erros e logging para melhor depuração
+### 5. Integração com o Human Relay
+- Extensão do sistema Human Relay existente
+- Automação transparente para o usuário final
 
-### 3. Melhorias no Gerenciamento de Configuração
+## Diagrama de Fluxo
 
-- Adicionamos suporte para armazenar a chave de API do Perplexity de forma segura
-- Estendemos a interface `SecureConfig` para incluir a nova configuração
-- Atualizamos as funções de criptografia/descriptografia para o novo campo
-- Documentamos o processo de adição de novas configurações
+```
+┌─────────────┐      ┌─────────────────┐      ┌────────────────┐
+│ Prompt do   │─────▶│ Human Relay     │─────▶│ Verifica       │
+│ Usuário     │      │ (humanRelay.ts) │      │ Configurações  │
+└─────────────┘      └─────────────────┘      └────────┬───────┘
+                                                       │
+      ┌───────────────────────────────────────────────┤
+      │                                               │
+┌─────▼────────┐                              ┌───────▼────────┐
+│ API REST     │                              │ Automação de   │
+│ Perplexity   │                              │ Navegador      │
+└──────┬───────┘                              └───────┬────────┘
+       │                                              │
+       │                                              │
+┌──────▼──────────────────────────────────────────────▼────────┐
+│                      Processamento de Resposta                │
+└───────────────────────────────┬───────────────────────────────┘
+                                │
+                        ┌───────▼────────┐
+                        │ Resposta para  │
+                        │ o Usuário      │
+                        └────────────────┘
+```
 
-### 4. Refatoração do Human Relay
+## Sistema de Fallback
 
-Reimplementamos o módulo `humanRelay.ts` para:
+O sistema de fallback funciona da seguinte forma:
 
-- Utilizar a nova arquitetura em camadas
-- Determinar dinamicamente o melhor método de obtenção de resposta
-- Implementar tratamento de erros mais robusto
-- Melhorar o logging para facilitar depuração
+1. Tenta usar a API REST do Perplexity (se a chave de API estiver disponível)
+2. Se falhar, tenta usar a automação de navegador
+3. Se ambos falharem, recorre ao modo manual original do Human Relay
 
-### 5. Manutenção da Compatibilidade
+Este sistema garante a máxima confiabilidade mesmo em condições instáveis.
 
-- Mantivemos compatibilidade com as implementações existentes
-- Atualizamos o browserService para utilizar o novo PerplexityService
-- Implementamos fallbacks graciosamente entre as diferentes implementações
+## Configurações Disponíveis
 
-## Benefícios da Nova Implementação
+| Configuração | Descrição | Valor Padrão |
+|-------------|-----------|--------------|
+| `perplexityEmail` | Email da conta Perplexity | - |
+| `perplexityPassword` | Senha da conta Perplexity | - |
+| `perplexityApiKey` | Chave de API do Perplexity (opcional) | - |
+| `perplexityPreferMethod` | Método preferido: "api", "browser" ou "auto" | "auto" |
+| `perplexityLoggingEnabled` | Habilitar logs detalhados | false |
+| `perplexityRequestTimeout` | Timeout para requisições (em ms) | 60000 |
 
-1. **Maior robustez**: Uso primário da API oficial do Perplexity reduz dependência da estrutura HTML/CSS do site
-2. **Melhor experiência do usuário**: Opções claras para configuração de credenciais e API key
-3. **Maior confiabilidade**: Fallbacks em múltiplos níveis garantem que o sistema tente todos os métodos disponíveis
-4. **Facilidade de manutenção**: Códigos mais organizados, bem documentados e com melhor tratamento de erros
-5. **Melhor observabilidade**: Logging mais detalhado para facilitar depuração de problemas
+## Troubleshooting
 
-## Próximos Passos Recomendados
+### Problemas de Autenticação
 
-1. **Interface de usuário para API key**: Implementar campos na interface para a chave de API do Perplexity
-2. **Testes automatizados**: Adicionar testes para a nova implementação
-3. **Telemetria**: Implementar métricas para monitorar taxas de sucesso/falha dos diferentes métodos
-4. **Remoção completa de código legado**: Após período de estabilidade, remover completamente a implementação depreciada
+- Verifique se suas credenciais estão corretas
+- Teste o login manualmente no site do Perplexity para confirmar que sua conta está ativa
+- Verifique se você tem uma assinatura PRO válida do Perplexity
 
-## Conclusão
+### Falhas na Automação do Navegador
 
-A nova implementação da integração com o Perplexity aborda todos os problemas identificados através de uma abordagem em camadas que prioriza métodos mais robustos (API) e mantém compatibilidade com métodos legados como fallback. Isso resulta em uma solução mais confiável, mais fácil de manter e com melhor experiência para o usuário final.
+- Atualize a extensão RooCode para a versão mais recente
+- Verifique os logs detalhados (habilite em configurações)
+- Tente o modo manual como alternativa temporária
+
+### Problemas de Performance
+
+- A automação de navegador é mais lenta que a API direta
+- Considere obter uma chave de API do Perplexity para melhor performance
+- Ajuste o timeout de requisição nas configurações avançadas
+
+## Considerações de Segurança
+
+- As credenciais são armazenadas de forma segura utilizando criptografia
+- Nenhuma informação é enviada para servidores externos além do Perplexity
+- A automação do navegador é executada localmente no ambiente do usuário
+
+## Limitações Conhecidas
+
+- A automação de navegador pode ser afetada por mudanças na interface do Perplexity
+- O tempo de resposta da automação é mais lento que a API direta
+- A integração requer uma assinatura PRO válida do Perplexity
+
+## Roadmap Futuro
+
+- Melhoria no sistema de detecção de erros e recuperação
+- Opções adicionais de personalização
+- Otimização de performance na automação do navegador
+- Integração com outros modelos disponíveis no Perplexity

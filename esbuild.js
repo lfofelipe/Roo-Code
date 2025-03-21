@@ -4,6 +4,7 @@ const path = require("path")
 
 const production = process.argv.includes("--production")
 const watch = process.argv.includes("--watch")
+const skipTypeCheck = process.argv.includes("--skip-check")
 
 /**
  * @type {import('esbuild').Plugin}
@@ -160,6 +161,19 @@ const copyLocalesFiles = {
 	},
 }
 
+const copyPackageJson = {
+	name: "copy-package-json",
+	setup(build) {
+		build.onEnd(() => {
+			// Copiar o package.json para o diretório dist
+			const packageJsonPath = path.join(__dirname, "package.json");
+			const destPath = path.join(__dirname, "dist", "package.json");
+			fs.copyFileSync(packageJsonPath, destPath);
+			console.log("Copied package.json to dist directory");
+		})
+	},
+}
+
 const extensionConfig = {
 	bundle: true,
 	minify: production,
@@ -168,6 +182,7 @@ const extensionConfig = {
 	plugins: [
 		copyWasmFiles,
 		copyLocalesFiles,
+		copyPackageJson,
 		/* add to the end of plugins array */
 		esbuildProblemMatcherPlugin,
 		{

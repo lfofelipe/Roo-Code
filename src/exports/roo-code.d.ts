@@ -254,6 +254,13 @@ export type GlobalStateKey =
 	| "showRooIgnoredFiles"
 	| "remoteBrowserEnabled"
 	| "language"
+	| "perplexityEmail"
+	| "perplexityPassword"
+	| "perplexityApiKey"
+	| "perplexityPreferMethod"
+	| "perplexityLoggingEnabled"
+	| "perplexityRequestTimeout"
+	| "perplexityModelId"
 
 export type ConfigurationKey = GlobalStateKey | SecretKey
 

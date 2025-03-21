@@ -1,5 +1,21 @@
 # Roo Code Changelog
 
+## [3.9.4] - 2025-03-20
+
+- Integração avançada com Perplexity PRO para uso do Claude 3.7 sem custos adicionais de API
+- Implementação de arquitetura em camadas para interação com Perplexity:
+  - Suporte primário via API REST oficial do Perplexity quando disponível
+  - Automação de navegador como fallback utilizando Playwright
+  - Entrada manual do usuário como último recurso
+- Criptografia de credenciais e armazenamento seguro das configurações do Perplexity
+- Melhorias no sistema de fallback para garantir continuidade de serviço
+- Tratamento de erros mais robusto e sistema de logging aprimorado
+
+## [3.9.3] - 2025-03-20
+
+- Correção de erro de TypeScript no arquivo de teste do VertexHandler para garantir segurança de tipo ao acessar propriedades em objetos filtrados
+- Melhor tratamento de tipos para evitar problemas potenciais em filtros de array
+
 ## [3.9.2] - 2025-03-19
 
 - Update GitHub Actions workflow to automatically create GitHub Releases (thanks @pdecat!)

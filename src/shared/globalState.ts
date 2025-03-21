@@ -122,6 +122,13 @@ export const GLOBAL_STATE_KEYS = [
 	"remoteBrowserEnabled",
 	"language",
 	"maxWorkspaceFiles",
+	"perplexityEmail",
+	"perplexityPassword",
+	"perplexityApiKey",
+	"perplexityPreferMethod",
+	"perplexityLoggingEnabled",
+	"perplexityRequestTimeout",
+	"perplexityModelId",
 ] as const
 
 export const PASS_THROUGH_STATE_KEYS = ["taskHistory"] as const
